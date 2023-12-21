@@ -17,7 +17,9 @@ FindFileTestPanel {
 
 
 	DropDown {
-		min-width: 250px;
+		width: 300px;
+		height: 60px;
+		text-overflow: clip;
 		border: 1px solid $fg-subtle;
 		border-radius: 15px;
 		align-items: center;
@@ -206,12 +208,14 @@ FindFileTestPanel {
 			.scroll-content {
 				flex-direction: column;
 				overflow: scroll;
-				overflow-x: scroll;
+				width: 100%;
 			}
 
 			.file {
 				flex-basis: 30px;
 				flex-shrink: 0;
+				width: 100%;
+				overflow: hidden;
 			}
 		}
 	}

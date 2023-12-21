@@ -232,7 +232,8 @@
             return;
 
         IsAssetMounterLoading = true;
-        await SelectedPackage.MountAsync( true );
+        var packageFs = await SelectedPackage.MountAsync( true );
+        AddFileSystem(SelectedPackage.FullIdent, packageFs);
         IsSelectedPackageMounted = SelectedPackage.IsMounted();
         IsAssetMounterLoading = false;
     }
@@ -248,4 +249,16 @@
         MatchingFiles = fileSystem.FindFile( folder, filePattern, recurse );
         StateHasChanged();
     }
+
+    private void AddFileSystem(string name, BaseFileSystem fileSystem)
+    {
+        var newOption = new Option(name, fileSystem);
+        FileSystemSelector.Options.Add( newOption );
+        FileSystemSelector.Options = FileSystemSelector.Options.OrderBy(o => o.Title).ToList();
+        FileSystemSelector.Selected = newOption;
+        StateHasChanged();
+    }
+
+
+
 }

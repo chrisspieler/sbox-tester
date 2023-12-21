@@ -1,8 +1,8 @@
 {
-  "Title": "FindFile Issue",
+  "Title": "FindFile Adventure",
   "Type": "game",
-  "Org": "local",
-  "Ident": "findfile_issue",
+  "Org": "duccsoft",
+  "Ident": "findfile",
   "Tags": null,
   "Schema": 1,
   "HasAssets": true,
