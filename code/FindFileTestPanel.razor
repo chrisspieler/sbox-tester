@@ -1,0 +1,251 @@
+@using System.Linq;
+@using System.Collections.Generic;
+@using Sandbox;
+@using Sandbox.UI;
+@inherits PanelComponent
+
+<root>
+    <div id="assetMounter">
+        @if ( IsAssetMounterLoading)
+        {
+            <div class="blocker">
+                <LoadingSpinner/>
+            </div>    
+        }
+        <div class="body @( IsAssetMounterLoading ? "inactive" : "")">
+            <div id="searchPanel">
+                <div class="row">
+                <div class="field">
+                    <div class="label">Search</div>
+                    <TextEntry @ref=SearchTerm Text=@string.Empty></TextEntry>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <div class="label">Sort By</div>
+                    <DropDown @ref=SortBy></DropDown>
+                </div>
+                <div class="field">
+                    <div class="label">Type</div>
+                    <DropDown @ref=PackageType></DropDown>
+                </div>
+            </div>
+            <div class="hr"></div>
+            <div id="queryText" class="readonly">@GetQuery()</div>
+            </div>
+            <div id="resultPanel">
+                <div id="resultList">
+                    @foreach (var package in FoundPackages)
+                    {
+                        <div class="list-item @(SelectedPackage == package ? "selected" : "")" onclick=@(() => SelectedPackage = package)>
+                            @package.Title
+                        </div>
+                    }
+                </div>
+                <div id="metadataViewer">
+                    <div class="field">
+                        <div class="label">PrimaryAsset</div>
+                        <div class="readonly">@PrimaryAsset</div>
+                    </div>
+                    <div class="field">
+                        <div class="label">Is Mounted</div>
+                        <div class="readonly">@IsSelectedPackageMounted</div>
+                    </div>
+                </div>
+            </div>
+            <div class="button-med icon" @onclick=@(() => LoadSelectedPackage())>cloud_download</div>
+        </div>
+    </div>
+    <div id="fileBrowser">
+        <div id="settingsPanel">
+            <div class="row">
+                <div class="field">
+                    <div class="label">File System</div>
+                    <DropDown @ref=FileSystemSelector></DropDown>
+                </div>
+                <div class="field">
+                    <div id="label">Recursive Search</div>
+                    <Checkbox @ref=Recurse Checked=@true></Checkbox>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <div id="label">Folder</div>
+                    <TextEntry @ref=Folder Text="/"></TextEntry>
+                </div>
+                <div class="field">
+                    <div id="label">File Pattern</div>
+                    <TextEntry @ref=FilePattern Text="*.vmdl_c"></TextEntry>
+                </div>
+            </div>
+        </div>
+        <div id="resultCount"></div>
+        <div id="resultPanel">
+            <div class="scroll-content">
+                @foreach (var file in MatchingFiles)
+                {
+                    <div class="file">@file</div>
+                }
+            </div>
+        </div>
+        <div id="refreshButton" class="icon button-med" onclick=@(() => RunFindFile())>refresh</div>
+    </div>
+</root>
+
+@code 
+{
+    // Asset Mounter
+    private TextEntry SearchTerm { get; set; }
+    private DropDown SortBy { get; set; }
+    private DropDown PackageType { get; set; }
+    private bool IsAssetMounterLoading { get; set; } = false;
+    private List<Package> FoundPackages { get; set; } = new();
+    private Package SelectedPackage 
+    {
+        get => _selectedPackage;
+        set
+        {
+            _selectedPackage = value;
+            FetchPackageInfo();
+        }
+    }
+    private Package _selectedPackage;
+    private string PrimaryAsset { get; set;}
+    private bool IsSelectedPackageMounted { get; set; } = false;
+    // File Browser
+    private TextEntry Folder { get; set; }
+    private TextEntry FilePattern { get; set; }
+    private Checkbox Recurse { get; set; }
+    private DropDown FileSystemSelector { get; set; }
+    private IEnumerable<string> MatchingFiles { get; set; } = Enumerable.Empty<string>();
+
+    private string GetQuery()
+    {
+        if ( !_refsLoaded ) return string.Empty;
+
+        return $"sort:{SortBy.Selected.Value} type:{PackageType.Selected.Value} {SearchTerm.Text}";
+    }
+
+    /// <summary>
+    /// the hash determines if the system should be rebuilt. If it changes, it will be rebuilt
+    /// </summary>
+    protected override int BuildHash() => System.HashCode.Combine( SelectedPackage, IsSelectedPackageMounted );
+
+    private bool _refsLoaded = false;
+
+    protected override void OnEnabled()
+    {
+        base.OnEnabled();
+        // Null out the @refs so we can check when they get built.
+        SearchTerm = null;
+        SortBy = null;
+        PackageType = null;
+        Folder = null;
+        FilePattern = null;
+        Recurse = null;
+        _refsLoaded = false;
+        MatchingFiles = Enumerable.Empty<string>();
+    }
+
+    protected override void OnUpdate()
+    {
+        // Ensure that we've reached the point when the @ref properties have been set.
+        if ( !_refsLoaded && Folder is not null)
+        {
+            SetupListeners();
+            _refsLoaded = true;
+        }
+        base.OnUpdate();
+    }
+
+    private void SetupListeners()
+    {
+        SearchTerm.OnTextEdited = _ => UpdatePackageList();
+        SortBy.AddEventListener("onchange", _ => UpdatePackageList());
+        SortBy.Options = new()
+            {
+                new Option( "Newest", "newest" ),
+                new Option( "Popular", "popular" ),
+                new Option( "Trending", "trending" ),
+                new Option( "Updated", "updated" ),
+                new Option( "Live", "live"),
+                new Option( "Oldest", "oldest" ),
+                new Option( "Used", "used" ),
+                new Option( "Referenced", "referenced" ),
+                new Option( "Favorite", "favorite" ),
+                new Option( "Friends", "friends" )
+            };
+        SortBy.Selected = SortBy.Options.First();
+        PackageType.AddEventListener("onchange", _ => UpdatePackageList());
+        PackageType.Options = new()
+            {
+                new Option( "Model", "model" ),
+                new Option( "Material", "material" ),
+                new Option( "Map", "map" ),
+                new Option( "Game", "game" ),
+                new Option( "Addon", "addon" ),
+                new Option( "Sound", "sound" ),
+                new Option( "Soundscape", "soundscape" ),
+                new Option( "Library", "library"),
+                new Option( "Particle", "particle" ),
+                new Option( "Shader", "shader" ),
+                new Option( "Collection", "collection" )
+            };
+        PackageType.Selected = PackageType.Options.First();
+        Folder.OnTextEdited = _ => RunFindFile();
+        FilePattern.OnTextEdited = _ => RunFindFile();
+        Recurse.AddEventListener("onchange", _ => RunFindFile());
+        FileSystemSelector.AddEventListener("onchange", _ => RunFindFile());
+        FileSystemSelector.Options = new()
+            {
+                new Option( "Mounted", FileSystem.Mounted ),
+                new Option( "Data", FileSystem.Data ),
+                new Option( "OrganizationData", FileSystem.OrganizationData )
+            };
+        FileSystemSelector.Selected = FileSystemSelector.Options.First();
+    }
+
+    private async void UpdatePackageList()
+    {
+        FoundPackages.Clear();
+        IsAssetMounterLoading = true;
+        var packages = await Package.FindAsync( GetQuery() );
+        FoundPackages.AddRange( packages.Packages );
+        IsAssetMounterLoading = false;
+    }
+
+    private async void FetchPackageInfo()
+    {
+        if (SelectedPackage is null)
+            return;
+
+        IsAssetMounterLoading = true;
+        var packageInfo = await Package.FetchAsync( SelectedPackage.FullIdent, false );
+        PrimaryAsset = packageInfo.GetMeta<string>( "PrimaryAsset" );
+        IsSelectedPackageMounted = packageInfo.IsMounted();
+        IsAssetMounterLoading = false;
+    }
+
+    private async void LoadSelectedPackage()
+    {
+        if ( SelectedPackage is null )
+            return;
+
+        IsAssetMounterLoading = true;
+        await SelectedPackage.MountAsync( true );
+        IsSelectedPackageMounted = SelectedPackage.IsMounted();
+        IsAssetMounterLoading = false;
+    }
+
+    private void RunFindFile()
+    {
+        if ( !_refsLoaded ) return;
+
+        var folder = Folder.Text;
+        var filePattern = FilePattern.Text;
+        var recurse = Recurse.Checked;
+        var fileSystem = FileSystemSelector.Selected.Value as BaseFileSystem;
+        MatchingFiles = fileSystem.FindFile( folder, filePattern, recurse );
+        StateHasChanged();
+    }
+}

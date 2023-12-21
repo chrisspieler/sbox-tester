@@ -1,0 +1,47 @@
+﻿@using System;
+@using System.Collections.Immutable;
+@using Sandbox;
+@using Sandbox.UI;
+@attribute [StyleSheet]
+@inherits Panel
+
+<root style="transform: translate(-50%, -50%) rotateZ(@_currentRotationDegrees);">
+
+</root>
+
+@code {
+    public string SpinnerImage 
+    {
+        get => _spinnerImage;
+        set
+        {
+            _spinnerImage = value;
+            Style.SetBackgroundImage( value );
+        }
+    }
+    private string _spinnerImage = "ui/loading_spinner.png";
+    public float RotationSpeed { get; set; } = 270f;
+
+    public Panel Spinner { get; set; }
+    private float _currentRotationDegrees;
+
+    protected override void OnAfterTreeRender(bool firstTime)
+    {
+        base.OnAfterTreeRender(firstTime);
+
+        if (!firstTime)
+            return;
+
+        Style.SetBackgroundImage( SpinnerImage );
+    }
+
+    public override void Tick()
+    {
+        _currentRotationDegrees += Time.Delta * RotationSpeed;
+        if ( _currentRotationDegrees > 360f )
+        {
+            _currentRotationDegrees -= 360f;
+        }
+        StateHasChanged();
+    }
+}
